@@ -558,8 +558,8 @@ def render_agent_log(steps, done=False, repo_label=None, dropped=None, explorati
         reason_lines = _beyond_reason_lines(exploration)  # data-driven "didn't reach" note
         html.append(
             f'<div class="al-step">🔗 <b>Of the <span class="al-num">{total}</span> functions '
-            f'reviewed by the AI agent, it raised several findings. A process called triage '
-            f'then reviewed all those findings and determined that '
+            f'reviewed by the AI agent, it raised several findings. A separate LLM step called '
+            f'triage then reviewed all those findings and determined that '
             f'<span class="al-num">{n}</span> functions’ vulnerability assessment hinges on '
             f'other functions — followed via the call chain (up to <b>{CHAIN_MAX_DEPTH}</b> '
             f'deep and <b>{CHAIN_MAX_HELPERS}</b> helpers wide — both configurable)</b><br><br>'
@@ -604,7 +604,7 @@ def render_agent_log(steps, done=False, repo_label=None, dropped=None, explorati
             'overturning its own call: once it has flagged a function, that verdict sits in '
             'its context, and more often than not it fails to correct itself — even when the '
             'chain ends in a function that makes the input safe, it re-reads its own flag and '
-            'leaves the finding standing. So triage — a <b>fresh reviewer</b>, separate from '
+            'leaves the finding standing. So triage — a <b>fresh LLM call</b>, separate from '
             'the agent that raised the finding — gets handed the finding plus the chain it '
             'gathers, with no stake in the original verdict and the opposite job: to '
             '<i>disprove</i> it. It may drop a finding <b>only</b> if it can quote the exact '
