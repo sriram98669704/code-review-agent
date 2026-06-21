@@ -558,8 +558,8 @@ def render_agent_log(steps, done=False, repo_label=None, dropped=None, explorati
         reason_lines = _beyond_reason_lines(exploration)  # data-driven "didn't reach" note
         html.append(
             f'<div class="al-step">🔗 <b>Of the <span class="al-num">{total}</span> functions '
-            f'reviewed by the AI agent, it raised several findings. A separate LLM step called '
-            f'triage then reviewed all those findings and determined that '
+            f'reviewed by the AI agent, it raised several findings. A separate triage step '
+            f'then reviewed all those findings and determined that '
             f'<span class="al-num">{n}</span> functions’ vulnerability assessment hinges on '
             f'other functions — followed via the call chain (up to <b>{CHAIN_MAX_DEPTH}</b> '
             f'deep and <b>{CHAIN_MAX_HELPERS}</b> helpers wide — both configurable)</b><br><br>'
@@ -568,7 +568,9 @@ def render_agent_log(steps, done=False, repo_label=None, dropped=None, explorati
             '<b>tainted path</b> for each finding — “taint” meaning untrusted input we track '
             'from function to function, and a line that <b>sanitises</b> it (cleans the '
             'untrusted value so it can’t do harm) <b>removes the taint</b>. This is the same '
-            'technique tools like <b>CodeQL</b> and <b>Semgrep</b> use.'
+            'technique tools like <b>CodeQL</b> and <b>Semgrep</b> use — a deterministic walk, '
+            'no model involved. The verdict on top of it is the model’s: <b>a fresh LLM</b> '
+            'reads the gathered chain and rules on each finding — keep or drop.'
             '<br><br>'
             'Not every finding gets a call graph, though — only the ones whose risk hinges on '
             'what a <i>called</i> function does with the input. A function with no tainted '
