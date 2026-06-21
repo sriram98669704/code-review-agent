@@ -1,4 +1,25 @@
-openai
-streamlit
-chromadb
-python-dotenv
+# Code Review Agent — dependencies
+# Install with: pip install -r requirements.txt
+#
+# Versions are pinned to exactly what the project was built and tested
+# against, so a deploy can never silently pull an untested (or incompatible)
+# newer release. Bump deliberately: change the pin, re-run the test suite.
+# protobuf/opentelemetry are pinned explicitly (not just left to chromadb's
+# loose transitive constraints) — an unpinned resolver mismatched them on a
+# clean install and crashed chromadb's import with a protobuf descriptor error.
+
+openai==2.42.0
+streamlit==1.50.0
+chromadb==1.5.9
+python-dotenv==1.2.1
+
+# Pinned transitively for chromadb — an unpinned resolver can pick an
+# incompatible protobuf/opentelemetry combination (protobuf descriptor
+# mismatch on import).
+protobuf==6.33.6
+opentelemetry-api==1.41.1
+opentelemetry-sdk==1.41.1
+opentelemetry-proto==1.41.1
+opentelemetry-exporter-otlp-proto-common==1.41.1
+opentelemetry-exporter-otlp-proto-grpc==1.41.1
+opentelemetry-semantic-conventions==0.62b1
