@@ -1,0 +1,20 @@
+# Streamlit configuration — deployment + security hardening.
+#
+# gatherUsageStats : telemetry OFF so no usage metadata ever leaves the app.
+# enableXsrfProtection / enableCORS : left ON (their secure defaults) — do NOT
+#   disable them; that would expose the app to cross-site request forgery.
+# showErrorDetails : "none" so an unexpected crash never prints a Python
+#   traceback (internal paths / code) onto the public page.
+
+[browser]
+gatherUsageStats = false
+
+[server]
+enableXsrfProtection = true
+enableCORS = true
+
+[client]
+# Public page shows a plain "something went wrong" on an uncaught crash instead
+# of a traceback. Errors raised inside the agent run are unaffected — those are
+# caught in-app and shown as a clean, redact()-ed message.
+showErrorDetails = "none"

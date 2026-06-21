@@ -1,0 +1,74 @@
+[
+  {
+    "id": "sql-injection",
+    "title": "SQL injection",
+    "severity": "high",
+    "description": "A SQL query built by concatenating or formatting a variable straight into the query string, e.g. a query built as \"SELECT ... WHERE col = '\" + value. The variable can break out of the string and run arbitrary SQL. Fix: use parameterized queries (placeholders like ?). SAFE: a query with no variable interpolation, or one that passes values as parameters."
+  },
+  {
+    "id": "hardcoded-secret",
+    "title": "Hardcoded secret or backdoor",
+    "severity": "high",
+    "description": "A secret written directly in the source: an API key, token, or password as a string literal (e.g. API_KEY = \"sk-...\"), OR a password/credential compared against a string literal, which is a backdoor (e.g. if password == \"<a hardcoded value>\"). Fix: load secrets from the environment; compare against a stored/looked-up value. SAFE: comparing against a value fetched from a store or database (e.g. expected == provided where `expected` came from a lookup) is NOT a hardcoded secret."
+  },
+  {
+    "id": "sensitive-logging",
+    "title": "Logging sensitive data",
+    "severity": "medium",
+    "description": "Writing secrets or credentials (passwords, tokens, API keys) into logs or stdout, e.g. log.info(\"...\" + pwd). Logs are often stored in plaintext and shipped to third parties. Fix: never log credentials; log a username or request id only. SAFE: logging non-sensitive fields like a username, status, or request id by themselves."
+  },
+  {
+    "id": "command-injection",
+    "title": "OS command injection",
+    "severity": "high",
+    "description": "Passing user-controlled input into a shell command, e.g. os.system(\"ping \" + host) or subprocess with shell=True and a built-up string. The input can inject extra commands. Fix: pass arguments as a list with shell=False. SAFE: a fixed command with no variable interpolation."
+  },
+  {
+    "id": "unsafe-eval",
+    "title": "Unsafe eval / exec",
+    "severity": "high",
+    "description": "Calling eval(), exec(), or compile() on input that is not a trusted constant. This runs arbitrary code. Fix: parse the data instead (json.loads, ast.literal_eval). SAFE: eval/exec on a hardcoded constant."
+  },
+  {
+    "id": "weak-crypto",
+    "title": "Weak or broken cryptography",
+    "severity": "medium",
+    "description": "Using a broken hash or cipher for security, e.g. md5 or sha1 for passwords, or DES. Fix: use bcrypt/argon2 for passwords and SHA-256+ for integrity. SAFE: md5/sha1 used as a non-security checksum where it is clearly not protecting a secret."
+  },
+  {
+    "id": "path-traversal",
+    "title": "Path traversal",
+    "severity": "high",
+    "description": "Building a filesystem path from user input without validation, e.g. open(\"/data/\" + filename), letting an attacker use ../ to escape the directory. Fix: validate against an allow-list and resolve/normalize the path. SAFE: a fixed path with no user input."
+  },
+  {
+    "id": "insecure-deserialization",
+    "title": "Insecure deserialization",
+    "severity": "high",
+    "description": "Deserializing untrusted input with pickle, yaml.load (unsafe loader), or similar, which can execute code. Fix: use json, or yaml.safe_load. SAFE: deserializing data the program itself produced and trusts."
+  },
+  {
+    "id": "ssrf",
+    "title": "Server-side request forgery",
+    "severity": "high",
+    "description": "Making an outbound HTTP request to a URL built from user input, e.g. requests.get(user_url), letting an attacker reach internal services. Fix: validate the host against an allow-list. SAFE: requests to fixed, trusted URLs."
+  },
+  {
+    "id": "disabled-tls-verification",
+    "title": "Disabled TLS certificate verification",
+    "severity": "medium",
+    "description": "Making an HTTPS request with certificate verification turned off, e.g. requests.get(url, verify=False) or any requests call passing verify=False. This defeats TLS: the client never checks the server's identity, so a man-in-the-middle can intercept or alter the traffic. Fix: leave verification on (the default), and supply a proper CA bundle if a custom one is needed. SAFE: requests that use the default verification or pass verify=True."
+  },
+  {
+    "id": "missing-input-validation",
+    "title": "Missing input validation",
+    "severity": "medium",
+    "description": "Using external input (request params, form fields) in a sensitive operation with no validation or bounds checks where the rule above does not already cover it. Fix: validate type, range, and format before use. SAFE: input that is validated, or that is not used in a sensitive sink."
+  },
+  {
+    "id": "missing-authorization",
+    "title": "Missing authorization check",
+    "severity": "high",
+    "description": "A sensitive operation - reading or changing another user's data, an admin action, or a privileged resource - performed from a caller-supplied identifier with no check that the caller is allowed to act on it, e.g. def get_account(user_id): return db.fetch(user_id) callable by anyone. Fix: verify the authenticated caller owns or has permission for the target before acting. SAFE: an operation that first checks the caller's identity, role, or permission and rejects unauthorized callers - including a role gate that raises or returns when the caller lacks the required role - or that only touches the caller's own resources."
+  }
+]

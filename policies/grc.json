@@ -1,0 +1,14 @@
+[
+  {
+    "id": "pii-logging",
+    "title": "Logging personal data (PII)",
+    "severity": "high",
+    "description": "Writing personally identifiable information - a person's name, Social Security number, email, phone, postal address, date of birth, or payment-card number - into logs or stdout, e.g. log.info(\"user \" + name + \", ssn=\" + ssn). Logs are retained and shared, so PII in logs is a compliance violation (GDPR/CCPA). This is about PERSONAL data, NOT secrets - passwords, tokens, and API keys are covered by sensitive-logging instead. Fix: log a user id or request id rather than the personal data. SAFE: logging a non-personal identifier such as a user id, request id, or status code."
+  },
+  {
+    "id": "pii-plaintext-storage",
+    "title": "Storing PII in cleartext",
+    "severity": "high",
+    "description": "Persisting personally identifiable information (SSN, payment-card number, email, postal address, date of birth) to a file or database with no masking, tokenization, or encryption, e.g. open(path).write(ssn) or an INSERT of a raw card number. Regulated data must be protected at rest. Fix: mask, tokenize, or encrypt the value before storing it. SAFE: storing a hashed, tokenized, or masked value, or storing non-personal data."
+  }
+]

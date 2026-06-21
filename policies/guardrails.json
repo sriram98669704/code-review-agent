@@ -1,0 +1,14 @@
+[
+  {
+    "id": "no-bare-except",
+    "title": "Bare or overly broad except that swallows errors",
+    "severity": "low",
+    "description": "ALWAYS flag a bare `except:` or broad `except Exception:` whose body makes the error VANISH - it does not surface the error and does not re-raise. Examples that MUST be flagged: `except Exception: pass`, `except Exception as e: return None`, or a broad except whose only log/print line is COMMENTED OUT (the error still vanishes). This silently swallows real failures; treat it as a definite violation, NOT a judgment call - flag it even when the swallow looks like a harmless fallback. SAFE (do NOT flag): (1) catching a specific exception type such as `except ValueError` or `except InvalidKey`; (2) a broad except whose body SURFACES the error by re-raising it, logging it (e.g. `logging.error(e)`), or printing it - `print(e)` counts as surfacing. Fix: catch the specific exception you expect, and log or re-raise anything else."
+  },
+  {
+    "id": "mutable-default-arg",
+    "title": "Mutable default argument",
+    "severity": "medium",
+    "description": "A function whose default argument value is a mutable object - a list, dict, or set literal - e.g. def f(x, items=[]) or def g(opts={}). Python builds that object once and shares it across every call, so data leaks between calls. Fix: default to None and create the object inside the function body. SAFE: defaults that are None, numbers, strings, tuples, or other immutable values."
+  }
+]
