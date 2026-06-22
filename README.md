@@ -4,6 +4,8 @@
 
 **Can an LLM review code the way a human reviewer would — read each function, flag the real risks, and explain why?**
 
+**[Live dashboard](https://ai-llm-code-review-agent.streamlit.app/)** — paste a GitHub repo URL and your own OpenAI key, see it run. · **[Demo video](https://drive.google.com/file/d/14TeN77E1aj-7FHNyH_5ylyWUTgnJmD6c/view?usp=drive_link)** — walkthrough of a full run.
+
 Static scanners match patterns; they don't reason about what a function actually does. This is an LLM *agent* that reads Python one function at a time and flags security holes, compliance (GRC) issues, weak guardrails, and duplicated logic — then explains every finding in plain English. It's a real agent, not a single prompt: the model **indexes** the repo, **judges** each function against the rules, **reads a helper's source** when a verdict depends on it, and a separate **triage** pass **overrules** any finding a helper proves harmless — so you get real risks, not false alarms. It complements tools like bandit/semgrep — it doesn't replace them.
 
 ---
