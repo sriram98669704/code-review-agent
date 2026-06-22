@@ -34,6 +34,8 @@ venv/bin/python agent.py                # the same review from the CLI
 
 The LLM is the brain. We hand it a workspace and a mission, then let it drive: it indexes the repo, judges each function, reads a helper's source when a verdict depends on it, and writes the verdict — and a triage pass overrules the false positives. That **decide → act → observe** cycle is what makes this an agent rather than a script.
 
+**Why a hand-written loop, not a framework.** The loop is written directly against the model's tool-calling API rather than wrapped in an agent framework (LangChain, an SDK `Agent`/`run()`). That's deliberate, not missing: a framework's `run()` gives the *same* architecture — it would not make this "more of an agent" — but driving the loop directly gives **finer control over each step than a managed `run()` does**, which is exactly what made the two-pass design (a paranoid first review, then a separate triage pass that overrules it) and the taint-guided evidence-gathering straightforward to express, with every step explicit and visible in the timeline. That control is the trade: a framework would cut boilerplate, but it would not change what the system does or make it more correct. The genuine production gaps are orthogonal to framework choice — see [What's next](#whats-next).
+
 ```
 mission ─▶ index_repo() — walk every file once, map each function to its file,
               and settle top-level code → returns a WORKSPACE.
@@ -96,7 +98,7 @@ A run is **ephemeral**: its result lives in memory, renders on screen, and is ne
 
 ### Fetching a repo
 
-Only the repo's `.py` files are pulled — **never** its `.git` history or any non-Python file. `fetched_repo()` ([`fetcher.py`](fetcher.py)) lists the file tree in one API call, keeps the Python blobs, and downloads each into a throwaway temp dir that's deleted after the scan. A `GITHUB_TOKEN` env var raises the rate limit from 60 to 5000 requests/hour; without one, small public repos still work, and if the API path can't run (rate-limited with no token, a transient error) it falls back to a shallow `git clone`.
+Only the repo's `.py` files are pulled — **never** its `.git` history or any non-Python file. `fetched_repo()` ([`fetcher.py`](fetcher.py)) lists the file tree in one API call, keeps the Python blobs, and downloads each into a throwaway temp dir that's deleted after the scan. A `GITHUB_TOKEN` env var raises the rate limit from 60 to 5000 requests/hour; without one, small public repos still work, and if the API path can't run (rate-limited with no token, a transient error) it falls back to a shallow `git clone`. The dashboard names which path ran on every review — *Fetched N .py file(s) via the GitHub API*, or a note that the API was unavailable and it cloned instead — so the fetch path is never invisible.
 
 A true **never-touches-disk, RAM-only** fetch was considered and rejected: the index, the duplicate pile, and the resolver all hold every function in memory for the whole run anyway, so streaming files saves nothing downstream — while it would force a rewrite of the chunker, indexer, and resolver. The temp-dir fetch already skips the `.git`/non-Python bulk (the actual saving) at a fraction of the risk.
 
@@ -294,3 +296,6 @@ The walk seeds taint from a function's **parameters** *and* from a short list of
 - **Real-repo demo** — showcase runs against known-vulnerable projects: vulpy, DVPWA, and OWASP PyGoat.
 - **Offline tests** — every pure, no-API surface ships with a free suite under `tests/` (run any with `python tests/test_<name>.py`): the import-aware resolver, the taint-guided call-graph walk, the agent-exploration summary, BYOK key resolution + redaction, the AST chunker, and the deterministic security checks. What's left to cover needs a key — integration tests of the LLM-dependent passes (judge, triage, duplicate-confirm) end to end.
 - **Per-finding budget** — the per-run caps (`MAX_FUNCTIONS`, `MAX_ROUNDS`) now bound a whole review; a finer-grained token/tool-call budget *per finding* could bound how much investigation any single verdict can spend on a pathological chain.
+- **Evals — measuring precision/recall.** A labelled corpus of known-vulnerable and known-safe functions, scored every run, so a prompt or model change can be *proven* to help rather than eyeballed. This is the biggest real gap: correctness today is read off the output, not measured.
+- **Observability — structured run traces.** Per-run timing, token cost, and tool-call counts emitted as structured logs, so a slow or expensive run can be diagnosed afterward — a live run is ephemeral today, so there's nothing to inspect once it's gone.
+- **Concurrency / scale.** Functions are judged sequentially — one `judge` call at a time, fine for a ~30-function demo but linear in repo size. Batching or parallelising the per-function calls within rate limits is what a large-repo run would need.

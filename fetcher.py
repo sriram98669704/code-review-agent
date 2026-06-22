@@ -233,21 +233,32 @@ def api_fetched_repo(url, token=None, timeout=30):
 
 
 @contextmanager
-def fetched_repo(url, timeout=30):
+def fetched_repo(url, timeout=30, on_source=None):
     """Prefer the lean .py-only API fetch; fall back to a shallow clone if the API path
     can't run (e.g. rate-limited with no token, or a transient API error). A bad URL
     (ValueError) is NOT a fallback case - both paths reject it - so it propagates.
 
+    `on_source`, when given, is called once with a short human-readable string naming
+    which path actually ran - the file-by-file GitHub API fetch, or the clone fallback
+    and why it fired - so a caller (the dashboard) can show it instead of leaving the
+    choice invisible.
+
     We enter the API context manager explicitly so the fallback only fires on a SETUP
     failure (everything before its yield); an error raised by the body still propagates
     normally and never silently re-runs the review on a clone."""
+    def _note(msg):
+        if on_source:
+            on_source(msg)
     cm = api_fetched_repo(url, timeout=timeout)
     try:
         path = cm.__enter__()                       # runs the API fetch
-    except RuntimeError:                            # API couldn't produce files -> clone instead
+    except RuntimeError as api_err:                 # API couldn't produce files -> clone instead
+        _note(f"GitHub API unavailable ({api_err}) — fell back to a shallow git clone")
         with cloned_repo(url, timeout=timeout) as path:
             yield path
         return
+    n_py = sum(1 for _ in Path(path).rglob("*.py"))  # count only the .py we actually wrote
+    _note(f"Fetched {n_py} .py file(s) via the GitHub API — file-by-file, no clone")
     try:
         yield path
     finally:

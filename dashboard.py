@@ -975,11 +975,14 @@ if running:
 
     result, report, reads, error = None, None, [], None
     exploration = None
+    fetch_source = {"label": None}          # which fetch path ran (API vs clone), for display
     try:
         with st.status("Running review…", expanded=True) as status:
-            # One placeholder we re-render on every step, so the live progress
-            # grows as the SAME nested tree the Run log shows afterwards —
-            # instead of a flat stream of identical bullet lines.
+            # A line at the top naming the fetch path (GitHub API vs clone fallback),
+            # then one placeholder we re-render on every step, so the live progress
+            # grows as the SAME nested tree the Run log shows afterwards — instead of
+            # a flat stream of identical bullet lines.
+            fetch_note = st.empty()
             log_box = st.empty()
 
             def on_step(msg):
@@ -987,7 +990,11 @@ if running:
                 with log_box.container():
                     render_agent_log(steps, repo_label=_label)
 
-            with fetched_repo(pending) as repo_path:
+            def on_source(msg):             # the fetcher tells us which path it took
+                fetch_source["label"] = msg
+                fetch_note.caption(f"📥 {msg}")
+
+            with fetched_repo(pending, on_source=on_source) as repo_path:
                 # The agent drives: it calls index_repo, judge, and read_function
                 # itself, then a triage pass overrules the false positives; we get
                 # back its verdict + the structured findings for the cards.
@@ -1011,6 +1018,7 @@ if running:
         "result": result, "report": report, "reads": reads,
         "label": _label, "error": error, "steps": steps,
         "exploration": exploration,
+        "fetch_source": fetch_source["label"],
     }
     st.session_state["review_running"] = False
     st.session_state.pop("review_pending", None)
@@ -1031,6 +1039,8 @@ if record:
                 "so a **fresh reviewer with no stake in the original verdict** is the one "
                 "willing to drop it. What survives both passes is the real risk, not noise."
             )
+            if record.get("fetch_source"):
+                st.caption(f"📥 {record['fetch_source']}")
             render_agent_log(record["steps"], done=True,
                              repo_label=record.get("label"),
                              dropped=(record.get("result") or {}).get("dropped", []),
