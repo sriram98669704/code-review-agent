@@ -44,6 +44,7 @@ import subprocess
 import tempfile
 import urllib.error
 import urllib.request
+from collections import namedtuple
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -58,29 +59,62 @@ _GH_HEADERS = {
 }
 _MAX_PY_FILES = 1000
 
-# https://github.com/<owner>/<repo>  (optional .git suffix, optional trailing /).
-# GitHub owner/repo names allow letters, digits, '-', '_', '.'.
+# https://github.com/<owner>/<repo> with an OPTIONAL GitHub "tree" suffix that
+# scopes the review to one branch and/or subfolder:
+#   .../tree/<branch>            -> review that branch's whole tree
+#   .../tree/<branch>/<subdir>   -> review only <subdir> on that branch
+# (so vulpy's deliberately-vulnerable code can be reviewed via .../tree/master/bad
+# without dragging in the sibling "good" folder). A bare repo URL keeps branch and
+# subdir None. Names allow letters, digits, '-', '_', '.'; branch/subdir stop at any
+# '?' or '#' so a query string or fragment can never bleed into the parsed path.
 _REPO_RE = re.compile(
     r"^https://github\.com/"
     r"(?P<owner>[A-Za-z0-9][A-Za-z0-9_.-]*)/"
     r"(?P<repo>[A-Za-z0-9][A-Za-z0-9_.-]*?)"
-    r"(?:\.git)?/?$"
+    r"(?:\.git)?"
+    r"(?:/tree/(?P<branch>[^/?#\s]+)(?:/(?P<subdir>[^?#\s]+?))?)?"
+    r"/?$"
 )
+
+# Parsed target: (owner, repo) always; branch/subdir are None for a bare repo URL.
+RepoTarget = namedtuple("RepoTarget", ["owner", "repo", "branch", "subdir"])
+
+
+def _scope_to_subdir(base, subdir):
+    """Narrow a fetched repo Path to a /tree/<branch>/<subdir> subfolder. Returns base
+    unchanged when there's no subdir. Guards against a subdir that escapes the temp dir
+    (belt-and-suspenders - parse_repo_url already rejects '..' segments) and gives a clean
+    error when the folder isn't in the repo."""
+    if not subdir:
+        return base
+    target = (base / subdir).resolve()
+    if not target.is_relative_to(base.resolve()):   # never climb out of the temp dir
+        raise RuntimeError(f"invalid subdirectory '{subdir}'")
+    if not target.is_dir():
+        raise RuntimeError(f"subdirectory '{subdir}' not found in this repo")
+    return target
 
 
 def parse_repo_url(url):
-    """Validate a public GitHub repo URL and return (owner, repo), or None.
+    """Validate a public GitHub repo URL and return a RepoTarget, or None.
 
-    Rejects anything that isn't exactly https://github.com/owner/repo - no other
-    host, no ssh/git/file scheme, no extra path segments. None means
-    'do not clone this'.
+    Accepts https://github.com/owner/repo, optionally followed by a GitHub
+    /tree/<branch>[/<subdir>] suffix that scopes the review to one branch and/or
+    subfolder. Rejects any other host, scheme, or path shape (blob, issues, query,
+    fragment, '..' traversal). branch/subdir are None for a bare repo URL. None means
+    'do not fetch this'.
     """
     if not url:
         return None
     m = _REPO_RE.match(url.strip())
     if not m:
         return None
-    return m.group("owner"), m.group("repo")
+    subdir = m.group("subdir")
+    if subdir:
+        subdir = subdir.rstrip("/")
+        if ".." in subdir.split("/"):               # no traversal segments, ever
+            return None
+    return RepoTarget(m.group("owner"), m.group("repo"), m.group("branch"), subdir or None)
 
 
 @contextmanager
@@ -100,15 +134,18 @@ def cloned_repo(url, timeout=60):
         raise ValueError(
             "not a public GitHub repo URL (expected https://github.com/owner/repo)"
         )
-    owner, repo = parsed
+    owner, repo, branch, subdir = parsed
     clean_url = f"https://github.com/{owner}/{repo}.git"  # canonical, from parsed parts
 
     tmpdir = tempfile.mkdtemp(prefix="review_")
     try:
+        cmd = ["git", "clone", "--depth", "1"]
+        if branch:                                  # honor a /tree/<branch> pin
+            cmd += ["--branch", branch]
+        cmd += ["--", clean_url, tmpdir]            # '--' so the URL can't be read as a flag
         try:
             subprocess.run(
-                ["git", "clone", "--depth", "1", "--", clean_url, tmpdir],
-                check=True, capture_output=True, text=True, timeout=timeout,
+                cmd, check=True, capture_output=True, text=True, timeout=timeout,
             )
         except FileNotFoundError:
             raise RuntimeError("git is not installed on this machine")
@@ -117,7 +154,7 @@ def cloned_repo(url, timeout=60):
         except subprocess.CalledProcessError as e:
             last = (e.stderr or "").strip().splitlines()
             raise RuntimeError(f"git clone failed: {last[-1] if last else 'unknown error'}")
-        yield Path(tmpdir)
+        yield _scope_to_subdir(Path(tmpdir), subdir)   # only the chosen subfolder, if any
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
 
@@ -163,17 +200,22 @@ def api_fetched_repo(url, token=None, timeout=30):
         raise ValueError(
             "not a public GitHub repo URL (expected https://github.com/owner/repo)"
         )
-    owner, repo = parsed                            # only the parsed parts touch the API paths
+    owner, repo, branch, subdir = parsed            # only the parsed parts touch the API paths
     token = token or os.environ.get("GITHUB_TOKEN")
 
     meta = _gh_json(f"{_API}/repos/{owner}/{repo}", token, timeout)
-    branch = meta.get("default_branch", "main")     # no branch-guessing: ask the repo
+    branch = branch or meta.get("default_branch", "main")  # URL branch wins; else ask the repo
     tree = _gh_json(
         f"{_API}/repos/{owner}/{repo}/git/trees/{branch}?recursive=1", token, timeout)
     py = [e for e in tree.get("tree", [])           # one tree call lists every file...
           if e.get("type") == "blob" and e.get("path", "").endswith(".py")]
+    if subdir:                                      # /tree/<branch>/<subdir> -> only that folder
+        prefix = subdir + "/"
+        py = [e for e in py if e.get("path", "").startswith(prefix)]
     if not py:                                      # ...we keep only the Python ones
-        raise RuntimeError("repo has no Python files to review")
+        raise RuntimeError(
+            f"no Python files to review under '{subdir}'" if subdir
+            else "repo has no Python files to review")
     py = py[:_MAX_PY_FILES]                          # generous cap; protects the rate limit
 
     tmpdir = tempfile.mkdtemp(prefix="review_")

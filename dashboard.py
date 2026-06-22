@@ -931,10 +931,11 @@ if key_source == "byok":
 # (fetcher.py), scanned, then deleted — local and deployed runs behave identically.
 repo_url = st.text_input(
     "GitHub repo link",
-    value="https://github.com/sriram98669704/code-review-sample",
+    placeholder="https://github.com/owner/repo",
     disabled=running,
-    help="Paste a public GitHub repo URL (https://github.com/owner/repo). "
-         "Only .py files are reviewed.",
+    help="Paste a public GitHub repo URL (https://github.com/owner/repo). Add a "
+         "/tree/<branch>/<subdir> suffix to review just one folder — e.g. "
+         ".../vulpy/tree/master/bad. Only .py files are reviewed.",
 )
 parsed = parse_repo_url(repo_url)
 target_ok = bool(parsed)
@@ -970,7 +971,7 @@ if running:
     steps = []
 
     _parsed = parse_repo_url(pending)
-    _label = f"{_parsed[0]}/{_parsed[1]}" if _parsed else pending
+    _label = f"{_parsed.owner}/{_parsed.repo}" if _parsed else pending
 
     result, report, reads, error = None, None, [], None
     exploration = None
