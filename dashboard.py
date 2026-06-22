@@ -886,8 +886,9 @@ else:
             st.session_state.pop(f"byok_input_{cur_gen}", None)
 
         st.text_input(
-            "OpenAI key  (sk-…)",
+            "OpenAI key",
             type="password",
+            placeholder="sk-…",
             key=_wkey,
             disabled=running,
             help="Held in memory for this session only — never stored or logged.",
@@ -947,13 +948,18 @@ run = st.button(
          "calls and costs a few cents; progress streams live as it runs.",
 )
 if not running:
+    # List everything still missing in ONE line, so the user sees BOTH requirements
+    # at once (key AND repo) instead of fixing one only to be told about the next.
+    needs = []
     if not api_key:
-        st.caption("⚠️ Set your API key above to enable Run.")
+        needs.append("set your OpenAI API key above")
     elif not key_ok:
-        st.caption(f"⚠️ That key looks invalid ({key_msg}) — check it and re-paste.")
-    elif not target_ok:
-        st.caption("⚠️ That doesn't look like a public GitHub repo URL "
-                    "(expected https://github.com/owner/repo).")
+        needs.append(f"fix the API key ({key_msg})")
+    if not target_ok:
+        needs.append("check the GitHub repo URL (expected https://github.com/owner/repo)"
+                     if repo_url.strip() else "paste a public GitHub repo URL")
+    if needs:
+        st.caption("⚠️ To enable Run, " + " and ".join(needs) + ".")
 
 # ── PASS 1 — user clicked Run: stash the request, flip to running, rerun so
 #    the controls above show disabled while PASS 2 does the work.
