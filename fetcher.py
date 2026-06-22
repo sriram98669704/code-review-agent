@@ -227,7 +227,11 @@ def api_fetched_repo(url, token=None, timeout=30):
             dest = Path(tmpdir) / e["path"]         # recreate the repo-relative path so the
             dest.parent.mkdir(parents=True, exist_ok=True)       # scanner reads it like any
             dest.write_bytes(content)               # folder - no downstream change needed
-        yield Path(tmpdir)
+        # Narrow to the requested /tree/<branch>/<subdir>, exactly like cloned_repo() does -
+        # otherwise files keep their subdir-prefixed repo path (e.g. "bad/mod_user.py"), the
+        # resolver derives a wrong dotted module name ("bad.mod_user") from it, and every
+        # cross-file import inside that subdir fails to resolve (silently empties triage).
+        yield _scope_to_subdir(Path(tmpdir), subdir)
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
 
