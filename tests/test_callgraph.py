@@ -192,6 +192,48 @@ def _():
     assert names == set(), names                        # a global can hold anything -> not seeded
 
 
+# ---- Flask request globals are the one (narrow) global we DO seed: a no-parameter view
+# that reads request.form/args/json/... and passes it to a helper gets that chain walked;
+# the bare `request` object itself is NOT seeded, only its caller-controlled members. ----
+
+@case("no parameters but reads request.form.get -> seeds, walks the chain into the sink")
+def _():
+    files = {"app.py": (
+        "import db\n\n"
+        "def view():\n"
+        "    name = request.form.get('name')\n"
+        "    return run_query(build(name))\n\n"
+        "def build(x):\n    return \"SELECT ... \" + x\n\n"
+        "def run_query(q):\n    db.execute(q)\n"
+    )}
+    names, sinks, _ = run(files, "view")
+    assert names == {"build", "run_query"}, names       # request.form is a source -> follow the chain
+    assert "db.execute" in sinks, sinks
+
+@case("request.get_json() through a subscript still carries taint into the helper")
+def _():
+    files = {"app.py": (
+        "def view():\n"
+        "    data = request.get_json()\n"
+        "    return keygen(data['username'])\n\n"
+        "def keygen(u):\n    return open('/tmp/' + u)\n"
+    )}
+    names, sinks, _ = run(files, "view")
+    assert names == {"keygen"}, names                    # data['username'] carries data's taint
+    assert "open" in sinks, sinks
+
+@case("the bare `request` object is NOT a source (only its caller-controlled members)")
+def _():
+    files = {"app.py": (
+        "def view():\n"
+        "    r = request\n"
+        "    return authenticate(r)\n\n"
+        "def authenticate(x):\n    return x.headers\n"
+    )}
+    names, _, _ = run(files, "view")
+    assert names == set(), names                         # bare `request` isn't seeded; only request.form/...
+
+
 # ---- the safety checkpoint: the real sample's bundle is UNCHANGED from one-hop ----
 def _real_sample():
     from chunker import walk_files, scan_file

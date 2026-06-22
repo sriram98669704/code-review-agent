@@ -70,11 +70,19 @@ def _params(fn):
 
 # Known external-input SOURCES - the no-parameter equivalents of a tainted argument.
 # A value read from one of these is treated as user-controlled, so a handler that takes
-# NO parameters (input from stdin, an env var, or argv) still gets its chain walked.
+# NO parameters (stdin, an env var, argv, or an HTTP request) still gets its chain walked.
 # Deliberately NARROW: an arbitrary module global is NOT a source - a global can hold
-# anything, so tainting every global read would over-drop (the unsafe direction).
-_TAINT_SOURCE_CALLS = {"input", "os.getenv", "os.environ.get"}
-_TAINT_SOURCE_PREFIXES = ("os.environ", "sys.argv")
+# anything, so tainting every global read would over-drop (the unsafe direction). The one
+# global we DO seed is Flask's `request`, and only its caller-controlled members
+# (form/args/json/...): it is a known framework input boundary, not an arbitrary value, so
+# a no-parameter view that reads request.form and passes it to a helper gets that cross-
+# function chain walked (this was the #1 item in README "What's next").
+_TAINT_SOURCE_CALLS = {"input", "os.getenv", "os.environ.get", "request.get_json"}
+_TAINT_SOURCE_PREFIXES = (
+    "os.environ", "sys.argv",
+    "request.form", "request.args", "request.values", "request.json",
+    "request.data", "request.files", "request.cookies", "request.headers",
+)
 
 
 def _assignments(fn):
@@ -91,8 +99,9 @@ def _assignments(fn):
 
 def _reads_source(value):
     """True if `value` reads from a known input source: input(), os.getenv(),
-    os.environ[...]/os.environ.get(...), or sys.argv. Used to seed taint where there is
-    no parameter to seed from."""
+    os.environ[...]/os.environ.get(...), sys.argv, or a caller-controlled Flask request
+    member (request.form/args/json/...). Used to seed taint where there is no parameter
+    to seed from."""
     for sub in ast.walk(value):
         if isinstance(sub, ast.Call) and _dotted(sub.func) in _TAINT_SOURCE_CALLS:
             return True
@@ -106,7 +115,8 @@ def _reads_source(value):
 def seed_taint(code):
     """The taint seed for a flagged function: ALL its parameters (minus a self/cls
     receiver), PLUS any local assigned from a known input SOURCE (input(), os.environ,
-    os.getenv, sys.argv). The judge doesn't tell us WHICH value is user-controlled, so we
+    os.getenv, sys.argv, Flask request.form/args/...). The judge doesn't tell us WHICH
+    value is user-controlled, so we
     treat every parameter - and every source read - as a potential source, conservative
     and the safe direction. Seeding from sources, not just parameters, lets a handler
     that takes NO parameters still get its helper chain walked."""
